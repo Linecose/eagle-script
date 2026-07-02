@@ -3,7 +3,7 @@
 **Gjuha e parë e programimit në shqip** — një transpiler/interpretues i ndërtuar mbi Node.js, që përkthen kod shqip në JavaScript dhe e ekzekuton, me mbështetje edhe për ndërfaqe grafike (GUI) desktop përmes NodeGui/Qt.
 
 - **Version:** 1.0.0
-- **Autor:** Geri
+- **Autor:** Gerjon Shkurti
 - **Licenca:** MIT
 - **Kërkesa:** Node.js `>= 14.0.0`
 
