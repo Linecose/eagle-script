@@ -1,0 +1,27 @@
+{
+  "name": "eagle-script",
+  "version": "1.0.0",
+  "logo": "logo.png",
+  "description": "Gjuhe programimi ne shqip - Albanian programming language",
+  "main": "index.js",
+  "bin": {
+    "eagle": "./index.js"
+  },
+  "scripts": {
+    "test": "node tests/test_suite.es 2>/dev/null || node index.js tests/test_suite.es"
+  },
+  "keywords": [
+    "albanian",
+    "programming-language",
+    "eagle-script",
+    "shqip"
+  ],
+  "author": "Geri",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "@nodegui/nodegui": "^0.74.2"
+  }
+}
