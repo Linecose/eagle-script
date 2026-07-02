@@ -16,7 +16,7 @@
     "eagle-script",
     "shqip"
   ],
-  "author": "Geri",
+  "author": "Gerjon Shkurti",
   "license": "MIT",
   "engines": {
     "node": ">=14.0.0"
