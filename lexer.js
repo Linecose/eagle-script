@@ -93,6 +93,14 @@ const KEYWORDS = new Set([
     'instanceof_al', // instanceof
     'eshte',        // === (strict equal keyword alternative)
     'nuk_eshte',    // !== (strict not-equal keyword alternative)
+    'kete',         // this
+    'konstruktor',  // constructor
+    'ndryshon',     // extends
+    'prindi',       // super
+    'statik',       // static
+    'nderro',       // switch
+    'rasti',        // case
+    'paracaktuar',  // default
 ]);
 
 class Lexer {

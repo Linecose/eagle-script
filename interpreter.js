@@ -1,257 +1,40 @@
-// interpreter.js - Eagle Script Interpreter (I plotë dhe i korrigjuar)
+// interpreter.js - Eagle Script Interpreter
+//
+// Perkthimi Eagle Script <-> JavaScript ndodh te perkthyes.js (skaner i vertete).
+// Ky skedar ekzekuton kodin e perkthyer ne nje kontekst 'vm' dhe formaton gabimet.
 
+'use strict';
+
+const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { createRequire } = require('module');
 const { Lexer } = require('./lexer');
-const gui = require('./gui'); // Moduli GUI (NodeGui/Qt i mbeshtjellur ne shqip)
+const gui = require('./gui'); // NodeGui ngarkohet vone, vetem kur perdoret nje funksion GUI
+const { Perkthyes, PerkthyesMbrapsht } = require('./perkthyes');
 
-// ─── Keyword map: Eagle Script → JavaScript ───────────────────────────────────
-const FJALOR = {
-    'leje':             'let',
-    'konstante':        'const',
-    'nese':             'if',
-    'ndryshe_nese':     'else if',
-    'ndryshe':          'else',
-    'per':              'for',
-    'ndersa':           'while',
-    'bej':              'do',
-    'ndalo':            'break',
-    'vazhdo':           'continue',
-    'kthe':             'return',
-    'funksion':         'function',
-    'klase':            'class',
-    'i_ri':             'new',
-    'fshi':             'delete',
-    'ne':               'in',
-    'te':               'of',
-    'provo':            'try',
-    'kap':              'catch',
-    'perfundimisht':    'finally',
-    'hedh':             'throw',
-    'eksporto':         'export',
-    'importo':          'import',
-    'vertete':          'true',
-    'gabim_val':        'false',
-    'asnje':            'null',
-    'i_papercaktuar':   'undefined',
-    'eshte':            '===',
-    'nuk_eshte':        '!==',
-    'instanceof_al':    'instanceof',
-};
-
-const FUNKSIONE_SHTESORE = {
-    'shfaq':        'console.log',
-    'paralajmero':  'console.warn',
-    'gabim_log':    'console.error',
-    'lexo':         'prompt',           
-    'gjatesia':     '.length',          
-    'llojiOf':      'typeof',
-    'ShtoNe':       '.push',
-    'HeqNga':       '.pop',
-    'HeqFill':      '.shift',
-    'ShtoFill':     '.unshift',
-    'bashko':       '.join',
-    'ndaj':         '.split',
-    'prerje':       '.slice',
-    'gjej':         '.indexOf',
-    'filtro':       '.filter',
-    'harton':       '.map',
-    'zvoglo':       '.reduce',
-    'per_secilin':  '.forEach',
-    'rendito':      '.sort',
-    'anasjelltas':  '.reverse',
-    'perfshin':     '.includes',
-    'bashkoje':     '.concat',
-    'stringjeso':   '.toString',
-    'numroje':      'parseInt',
-    'numroje_dec':  'parseFloat',
-    'eshte_NaN':    'isNaN',
-    'shto_Math':    'Math.max',
-    'vogel_Math':   'Math.min',
-    'rrumbullakoset':'Math.round',
-    'dyshja':       'Math.floor',
-    'tavani':       'Math.ceil',
-    'katrori':      'Math.sqrt',
-    'fuqia':        'Math.pow',
-    'rastesi':      'Math.random',
-    'abs_val':      'Math.abs',
-    'JSON_ne_tekst':'JSON.stringify',
-    'tekst_ne_JSON':'JSON.parse',
-    'Varg':         'Array',
-    'Objekt':       'Object',
-    'celesat':      'Object.keys',
-    'vlerat_obj':   'Object.values',
-    'hyrjet':       'Object.entries',
-    'kopjo_obj':    'Object.assign',
-    'ngrij_obj':    'Object.freeze',
-    'Shuma':        'Number',
-    'Tekst':        'String',
-    'Boolean_al':   'Boolean',
-    'prit':         'setTimeout',
-    'prit_interval':'setInterval',
-    'anulo_prit':   'clearTimeout',
-    'anulo_interval':'clearInterval',
-    'premtim':      'Promise',
-    'async_al':     'async',
-    'prite':        'await',
-};
-
-// ─── Funksionet GUI (te injektuara automatikisht ne vm nga ekzekuto(),
-//     por qe duhen importuar shprehimisht ne cdo skedar .js te perkthyer
-//     qe do te ekzekutohet i vetem, jashte interpretuesit) ───────────────────
-const FUNKSIONET_GUI = ['krijo_dritare', 'buton_i_ri', 'tekst_i_ri', 'fushe_teksti'];
-
-// ─── Translator: Albanian → JavaScript ────────────────────────────────────────
-class Perkthyes {
-    constructor() {
-        this.fjalor = FJALOR;
-        this.funksione = FUNKSIONE_SHTESORE;
+// Lexim sinkron nga stdin per lexo(...): shfaq pyetjen dhe kthen rreshtin e shtypur.
+function lexoRresht(pyetja) {
+    if (pyetja !== undefined) process.stdout.write(String(pyetja));
+    const buf = Buffer.alloc(1);
+    let rreshti = '';
+    for (;;) {
+        let lexuar = 0;
+        try {
+            lexuar = fs.readSync(0, buf, 0, 1, null);
+        } catch (e) {
+            if (e.code === 'EAGAIN') continue;
+            if (e.code === 'EOF') break;
+            throw e;
+        }
+        if (lexuar === 0) break;               // fundi i hyrjes
+        const ch = buf.toString('utf8');
+        if (ch === '\n') break;
+        rreshti += ch;
     }
-
-    perkthe(kodiBurim) {
-        let kodiJS = kodiBurim;
-        
-        // 1. Fshij komentet me #
-        kodiJS = kodiJS.replace(/(?<!["'`][^"'`\n]*)#[^\n]*/g, '');
-
-        // 2. Izolo stringjet dhe template literals (që të mos ndryshojë asgjë brenda tyre)
-        const stringet = [];
-        kodiJS = kodiJS.replace(/(["'`])(?:(?!\1)[^\\]|\\.)*\1/g, (match) => {
-            const placeholder = `__TEKST_${stringet.length}__`;
-            stringet.push(match);
-            return placeholder;
-        });
-
-        // 3. Përkthe fjalët kyçe strukturore (Përveç 'te' dhe 'klase' që duan trajtim specifik)
-        const fjalorSpecifik = Object.entries(this.fjalor).filter(([k]) => k !== 'te' && k !== 'klase');
-        for (const [shqip, js] of fjalorSpecifik) {
-            const regex = new RegExp(`\\b${shqip}\\b`, 'g');
-            kodiJS = kodiJS.replace(regex, js);
-        }
-
-        // Zëvendëso 'klase' me 'class' VETËM nëse NUK vjen pas 'leje ' ose 'konstante ' (p.sh. klase Personi {})
-        kodiJS = kodiJS.replace(/(?<!(?:leje|konstante)\s+)\bklase\b/g, 'class');
-        // Nëse ka mbetur ende ndonjë 'klase' (si variabël), e kthejmë në 'klase_var' në JS që të mos ketë konflikt me 'class' të sistemit
-        kodiJS = kodiJS.replace(/\bklase\b/g, 'klase_var');
-
-        // 4. Kthe ciklin for...of
-        kodiJS = kodiJS.replace(/\bfor\s*\(([^)]+)\bte\b/g, (match) => match.replace(/\bte\b/, 'of'));
-
-        // 5. Përkthe funksionet globale (shfaq -> console.log) direkt në kod
-        for (const [shqip, js] of Object.entries(this.funksione)) {
-            if (!js.startsWith('.')) {
-                const regex = new RegExp(`\\b${shqip}\\b`, 'g');
-                kodiJS = kodiJS.replace(regex, js);
-            }
-        }
-
-        // 6. Përkthe metodat (.filtro -> .filter)
-        for (const [shqip, js] of Object.entries(this.funksione)) {
-            if (js.startsWith('.')) {
-                const metodaJS = js.slice(1);
-                const regex = new RegExp(`\\.${shqip}\\b`, 'g');
-                kodiJS = kodiJS.replace(regex, `.${metodaJS}`);
-            }
-        }
-
-        // 7. Kthe stringjet mbrapsht (tani template literals do të kthehen të sigurta)
-        kodiJS = kodiJS.replace(/__TEKST_(\d+)__/g, (_, i) => stringet[parseInt(i)]);
-
-        // 8. Pasi u kthyen stringjet, nëse brenda template literal ${...} ka mbetur 'klase', e bëjmë 'klase_var'
-        kodiJS = kodiJS.replace(/\${([^}]+)}/g, (match, p1) => {
-            return `\${${p1.replace(/\bklase\b/g, 'klase_var')}}`;
-        });
-
-        // 9. Nese kodi perdor funksione GUI, shto importin automatik te gui.js
-        //    ne rreshtin e pare. Perdorim shteg ABSOLUT (bazuar te __dirname
-        //    i ketij moduli, jo i skedarit te destinacionit) qe importi te
-        //    funksionoje pavaresisht se ku ruhet skedari .js i perkthyer
-        //    (p.sh. ne nje dosje krejt tjeter nga ajo e paketes eagle-script).
-        const perdorGUI = FUNKSIONET_GUI.some((fn) => new RegExp(`\\b${fn}\\b`).test(kodiJS));
-        if (perdorGUI) {
-            const shtegulGui = path.join(__dirname, 'gui.js').replace(/\\/g, '/');
-            const rreshtiImport =
-                `const { ${FUNKSIONET_GUI.join(', ')} } = require('${shtegulGui}');\n`;
-            kodiJS = rreshtiImport + kodiJS;
-        }
-
-        return kodiJS;
-    }
+    return rreshti.replace(/\r$/, '');
 }
 
-// ─── Reverse Translator: JavaScript → Albanian ──────────────────────────────
-class PerkthyesMbrapsht {
-    constructor() {
-        this.fjalorMbrapsht = {};
-        for (const [shqip, js] of Object.entries(FJALOR)) {
-            this.fjalorMbrapsht[js] = shqip;
-        }
-
-        this.funksioneMbrapsht = {};
-        for (const [shqip, js] of Object.entries(FUNKSIONE_SHTESORE)) {
-            this.funksioneMbrapsht[js] = shqip;
-        }
-    }
-
-    perktheMbrapsht(kodiJS) {
-        let kodiES = kodiJS;
-
-        // Izolo stringjet
-        const stringet = [];
-        kodiES = kodiES.replace(/(["'`])(?:(?!\1)[^\\]|\\.)*\1/g, (match) => {
-            const placeholder = `__JS_TEKST_${stringet.length}__`;
-            stringet.push(match);
-            return placeholder;
-        });
-
-        // Kthimi i operatorëve pa pasur nevojë për kufij fjalësh (\b) pasi === nuk është fjalë alfabetike
-        kodiES = kodiES.replace(/===/g, 'eshte');
-        kodiES = kodiES.replace(/!==/g, 'nuk_eshte');
-        kodiES = kodiES.replace(/==/g, 'eshte');
-
-        // Kthe metodat (.filter -> .filtro)
-        for (const [js, shqip] of Object.entries(this.funksioneMbrapsht)) {
-            if (js.startsWith('.')) {
-                const metodaJS = js.slice(1);
-                const regex = new RegExp(`\\.${metodaJS}\\b`, 'g');
-                kodiES = kodiES.replace(regex, `.${shqip}`);
-            }
-        }
-
-        // Kthe funksionet globale (console.log -> shfaq)
-        const globaleSipasGjatesise = Object.entries(this.funksioneMbrapsht)
-            .filter(([js]) => !js.startsWith('.'))
-            .sort((a, b) => b[0].length - a[0].length);
-
-        for (const [js, shqip] of globaleSipasGjatesise) {
-            const eskapuarJS = js.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-            const regex = new RegExp(`\\b${eskapuarJS}\\b`, 'g');
-            kodiES = kodiES.replace(regex, shqip);
-        }
-
-        // Kthe fjalët kyçe
-        kodiES = kodiES.replace(/\belse\s+if\b/g, 'ndryshe_nese');
-
-        const fjaletSipasGjatesise = Object.entries(this.fjalorMbrapsht)
-            .filter(([js]) => js !== 'else if' && js !== '===' && js !== '!==')
-            .sort((a, b) => b[0].length - a[0].length);
-
-        for (const [js, shqip] of fjaletSipasGjatesise) {
-            const regex = new RegExp(`\\b${js}\\b`, 'g');
-            kodiES = kodiES.replace(regex, shqip);
-        }
-
-        // Kthe ciklin for...of
-        kodiES = kodiES.replace(/\bfor\s*\(([^)]+)\bof\b/g, (match) => match.replace(/\bof\b/, 'te'));
-
-        // Rikthe stringjet
-        kodiES = kodiES.replace(/__JS_TEKST_(\d+)__/g, (_, i) => stringet[parseInt(i)]);
-
-        return kodiES;
-    }
-}
-
-// ─── Interpreter ─────────────────────────────────────────────────────────────
 class EagleScriptInterpreter {
     constructor(opsione = {}) {
         this.perkthyes = new Perkthyes();
@@ -260,45 +43,18 @@ class EagleScriptInterpreter {
         this.shfaqPerkthimin = opsione.shfaqPerkthimin || false;
     }
 
-    _libraria_standarde() {
-        return `
-const shfaq = (...args) => console.log(...args);
-const paralajmero = (...args) => console.warn(...args);
-const gabim_log = (...args) => console.error(...args);
-const numroje = (v, baza) => parseInt(v, baza);
-const numroje_dec = (v) => parseFloat(v);
-const eshte_NaN = (v) => isNaN(v);
-const shto_Math = (...a) => Math.max(...a);
-const vogel_Math = (...a) => Math.min(...a);
-const rrumbullakoset = (v) => Math.round(v);
-const dyshja = (v) => Math.floor(v);
-const tavani = (v) => Math.ceil(v);
-const katrori = (v) => Math.sqrt(v);
-const fuqia = (b, e) => Math.pow(b, e);
-const rastesi = () => Math.random();
-const abs_val = (v) => Math.abs(v);
-const JSON_ne_tekst = (v, r, s) => JSON.stringify(v, r, s);
-const tekst_ne_JSON = (v) => JSON.parse(v);
-const celesat = (o) => Object.keys(o);
-const vlerat_obj = (o) => Object.values(o);
-const hyrjet = (o) => Object.entries(o);
-const kopjo_obj = (...a) => Object.assign(...a);
-const ngrij_obj = (o) => Object.freeze(o);
-const prompt = (...args) => {
-    if (typeof globalThis.prompt === 'function') {
-        return globalThis.prompt(...args);
-    }
-    return '';
-};
-`;
-    }
-
     ekzekuto(kodiBurim, opsione = {}) {
-        try {
-            const lexer = new Lexer(kodiBurim);
-            lexer.tokenizo();
-        } catch (e) {
-            if (this.debug) console.error('[Lexer]', e.message);
+        // Lexeri sherben vetem per diagnostikim (me --debug); nuk bllokon ekzekutimin.
+        if (this.debug) {
+            try {
+                const lexer = new Lexer(kodiBurim);
+                const tokens = lexer.tokenizo();
+                for (const t of tokens) {
+                    if (t.type === 'GABIM') console.error(`[Lexer] Karakter i panjohur '${t.value}' ne rreshtin ${t.rreshti}`);
+                }
+            } catch (e) {
+                console.error('[Lexer]', e.message);
+            }
         }
 
         const kodiJS = this.perkthyes.perkthe(kodiBurim);
@@ -309,72 +65,103 @@ const prompt = (...args) => {
             console.log('─────────────────────────────────────');
         }
 
-        try {
-            const kodiPlote = this._libraria_standarde() + '\n' + kodiJS;
-            const argv = opsione.argv || process.argv;
-            const filePath = opsione.filePath || null;
-            const cwd = opsione.cwd || process.cwd();
-            const context = {
-                console,
-                process: { ...process, argv },
-                setTimeout,
-                setInterval,
-                clearTimeout,
-                clearInterval,
-                Promise,
-                Math,
-                JSON,
-                Object,
-                Array,
-                String,
-                Number,
-                Boolean,
-                parseInt,
-                parseFloat,
-                isNaN,
-                require,
-                module,
-                exports,
-                __dirname: filePath ? path.dirname(filePath) : cwd,
-                __filename: filePath ? path.resolve(filePath) : undefined,
+        const filePath = opsione.filePath || null;
+        const emriSkedarit = filePath ? path.resolve(filePath) : 'eagle-script.es';
+        const argv = opsione.argv || process.argv;
+        const cwd = opsione.cwd || process.cwd();
 
-                // ─── Funksionet e GUI-t (Eagle Script GUI mbi NodeGui/Qt) ───
-                // Injektohen automatikisht ne cdo kontekst ekzekutimi, pa
-                // pasur nevoje qe skripti .es te beje ndonje 'importo'.
-                krijo_dritare: gui.krijo_dritare,
-                buton_i_ri:    gui.buton_i_ri,
-                tekst_i_ri:    gui.tekst_i_ri,
-                fushe_teksti:  gui.fushe_teksti,
-            };
-            context.global = context;
-            context.globalThis = context;
-            vm.runInNewContext(kodiPlote, context, { filename: filePath || 'eagle-script' });
+        const context = {
+            console,
+            process: { ...process, argv },
+            setTimeout, setInterval, clearTimeout, clearInterval,
+            setImmediate, clearImmediate, queueMicrotask,
+            Buffer, URL, URLSearchParams, TextEncoder, TextDecoder,
+            require, module, exports,
+            prompt: lexoRresht,
+            __dirname: filePath ? path.dirname(filePath) : cwd,
+            __filename: filePath ? path.resolve(filePath) : undefined,
+        };
+        // Funksionet GUI injektohen automatikisht (pa 'importo').
+        for (const emri of gui.EMRAT_GUI) context[emri] = gui[emri];
+        context.global = context;
+        context.globalThis = context;
+        vm.createContext(context);
+
+        // Regjistri per perfshi(): burimet (per gabime) dhe modulet e ngarkuara (cache).
+        this._kontekst = context;
+        this._burimet = new Map([[emriSkedarit, kodiBurim]]);
+        this._modulet = new Map();
+        context.perfshi = this._krijoPerfshi(filePath ? path.dirname(emriSkedarit) : cwd);
+
+        // Kodi i perkthyer ka NJE-ME-NJE rreshtat e burimit, ndaj numrat e rreshtave
+        // ne gabime jane te sakte.
+        try {
+            const skripti = new vm.Script(kodiJS, { filename: emriSkedarit });
+            skripti.runInContext(context);
         } catch (gabim) {
             console.error('Gabim gjate ekzekutimit te Eagle Script:');
-            this._format_gabim(gabim, kodiBurim, kodiJS);
+            this._format_gabim(gabim, emriSkedarit);
+            process.exitCode = 1;
         }
+    }
+
+    // perfshi("./te_dhenat.es")  -> ngarkon nje skedar .es tjeter si modul dhe kthen
+    //                               ate qe ai vendos ne module.exports (me cache).
+    // perfshi("zlib")             -> ngarkon nje modul Node / npm (kerkohet nga dosja e skedarit).
+    _krijoPerfshi(dosja) {
+        return (rruga) => {
+            const eshteRrugeLokale = rruga.startsWith('.') || path.isAbsolute(rruga);
+            if (!eshteRrugeLokale) return createRequire(path.join(dosja, 'eagle.js'))(rruga);
+            let abs = path.resolve(dosja, rruga);
+            if (!path.extname(abs)) abs += '.es';
+            return this._ngarkoModul(abs);
+        };
+    }
+
+    _ngarkoModul(abs) {
+        if (this._modulet.has(abs)) return this._modulet.get(abs).exports;
+        const burim = fs.readFileSync(abs, 'utf-8');
+        this._burimet.set(abs, burim);
+        const kodiJS = this.perkthyes.perkthe(burim);
+        const mod = { exports: {} };
+        this._modulet.set(abs, mod);          // para ekzekutimit: lejon varesi rrethore
+        // Mbeshtjellesi qendron ne rreshtin e pare, qe numrat e rreshtave te mos zhvendosen.
+        const mbeshtjelles = '(function (module, exports, perfshi, __dirname, __filename) { ' + kodiJS + '\n})';
+        const fn = new vm.Script(mbeshtjelles, { filename: abs }).runInContext(this._kontekst);
+        const dosja = path.dirname(abs);
+        fn.call(mod.exports, mod, mod.exports, this._krijoPerfshi(dosja), dosja, abs);
+        return mod.exports;
     }
 
     ktheNeEagleScript(kodiJS) {
         return this.perkthyesMbrapsht.perktheMbrapsht(kodiJS);
     }
 
-    _format_gabim(gabim, burim, js) {
-        const msg = gabim.message;
-        const match = (gabim.stack || '').match(/\(eval[^)]*:(\d+):(\d+)\)/);
-        if (match) {
-            const rreshti = parseInt(match[1]) - this._libraria_standarde().split('\n').length;
-            const kollona = parseInt(match[2]);
-            const rreshtat = burim.split('\n');
-            if (rreshtat[rreshti - 1]) {
-                console.error(`  Rreshti ${rreshti}, Kollona ${kollona}: ${msg}`);
-                console.error(`  ${rreshtat[rreshti - 1]}`);
-                console.error(`  ${' '.repeat(kollona - 1)}^`);
-                return;
+    // Gjen ne stack-un e gabimit skedarin .es (kryesor ose te perfshire) dhe rreshtin.
+    _format_gabim(gabim, emriKryesor) {
+        const mesazhi = gabim && gabim.message ? gabim.message : String(gabim);
+        const stack = (gabim && gabim.stack) || '';
+
+        let gjetur = null;       // { skedari, rreshti, pozicioni }
+        for (const skedari of this._burimet.keys()) {
+            const re = new RegExp(skedari.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':(\\d+)');
+            const m = re.exec(stack);
+            if (m && (gjetur === null || m.index < gjetur.pozicioni)) {
+                gjetur = { skedari, rreshti: parseInt(m[1], 10), pozicioni: m.index };
             }
         }
-        console.error(' ', msg);
+
+        const rreshtat = gjetur ? this._burimet.get(gjetur.skedari).split('\n') : [];
+        if (gjetur && rreshtat[gjetur.rreshti - 1] !== undefined) {
+            const kuAshte = gjetur.skedari === emriKryesor
+                ? ''
+                : ` (${path.relative(path.dirname(emriKryesor), gjetur.skedari)})`;
+            console.error(`  Rreshti ${gjetur.rreshti}${kuAshte}: ${mesazhi}`);
+            console.error(`  ${rreshtat[gjetur.rreshti - 1].trim()}`);
+        } else {
+            console.error(' ', mesazhi);
+        }
     }
 }
 
-module.exports = { EagleScriptInterpreter, Perkthyes, FJALOR, FUNKSIONE_SHTESORE };
+module.exports = { EagleScriptInterpreter, Perkthyes, PerkthyesMbrapsht };
