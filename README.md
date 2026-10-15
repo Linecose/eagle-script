@@ -1,9 +1,16 @@
 # Eagle Script
 
+<<<<<<< HEAD
 **Gjuha e parë e programimit në shqip** — një transpiler/interpretues i ndërtuar mbi Node.js, që përkthen kod shqip në JavaScript dhe e ekzekuton, me mbështetje edhe për ndërfaqe grafike desktop përmes Qt dhe addon-it native EagleGUI.
 
 - **Version:** 2.0.0
 - **Autor:** Geri
+=======
+**Gjuha e parë e programimit në shqip** — një transpiler/interpretues i ndërtuar mbi Node.js, që përkthen kod shqip në JavaScript dhe e ekzekuton, me mbështetje edhe për ndërfaqe grafike (GUI) desktop përmes NodeGui/Qt.
+
+- **Version:** 1.0.0
+- **Autor:** Gerjon Shkurti
+>>>>>>> b51f9f42e105c6bb473c4d7f285996426711d7eb
 - **Licenca:** MIT
 - **Kërkesa:** Node.js `>= 14.0.0`
 
@@ -35,6 +42,7 @@ Ose brenda një projekti:
 npm install eagle-script
 ```
 
+<<<<<<< HEAD
 GUI përdor addon-in Qt te dosja `eaglegui` (nuk ka nevojë për `qode` ose NodeGui). Nëse moduli native nuk është ndërtuar në makinën tënde:
 
 ```bash
@@ -45,6 +53,14 @@ npm run nderto
 
 Kërkohen Node.js 18+, Qt 6, CMake dhe një përpilues C++17. Udhëzimet e plota gjenden te [`eaglegui/README.md`](./eaglegui/README.md).
 
+=======
+Për të përdorur GUI-n (dritare, butona, etj.), duhet instaluar edhe NodeGui:
+
+```bash
+npm install @nodegui/nodegui
+```
+
+>>>>>>> b51f9f42e105c6bb473c4d7f285996426711d7eb
 ---
 
 ## Përdorimi (CLI)
@@ -64,9 +80,18 @@ eagle <skedari.js>               # E kthen kodin JavaScript standard në Eagle S
 | `--versioni` | `--version` | Shfaq versionin e Eagle Script |
 | `--ndihme` | `--help` | Shfaq mesazhin e ndihmës |
 
+<<<<<<< HEAD
 ### Ekzekutimi CLI dhe GUI
 
 Të dy llojet e skripteve ekzekutohen me Node. Moduli native Qt ngarkohet vetëm kur thirret funksioni i parë grafik; dritarja e parë nis vetë ciklin e ngjarjeve. Për shembull, ekzekuto `node index.js shembuj/biblioteka.es`. Nëse addon-i nuk është ndërtuar, ndiq udhëzimet te `eaglegui/README.md`.
+=======
+### Zbulimi automatik CLI vs GUI
+
+Nuk ka nevojë të specifikosh nëse skripti yt është një program CLI apo një aplikacion me dritare. `eagle` e skanon vetë skedarin `.es`:
+
+- Nëse gjen thirrje të `krijo_dritare`, `buton_i_ri`, `tekst_i_ri` ose `fushe_teksti`, e rinis automatikisht ekzekutimin përmes `qode` (binari i posaçëm i NodeGui, i domosdoshëm për event loop-in e Qt-it).
+- Përndryshe, e ekzekuton normalisht me `node`.
+>>>>>>> b51f9f42e105c6bb473c4d7f285996426711d7eb
 
 > **Kujdes:** Mos i emërto skriptet e tua `gui.es`, `index.es`, `interpreter.es` ose `lexer.es` — `--perkthe` do të prodhonte një skedar `.js` me të njëjtin emër si një skedar themelor i vetë paketës Eagle Script, dhe ruajtja bllokohet automatikisht për t'i mbrojtur këto skedarë.
 
@@ -141,10 +166,13 @@ provo {                       # try
 | `klase` | `class` | `instanceof_al` | `instanceof` |
 | `i_ri` | `new` | `fshi` | `delete` |
 | `ne` | `in` | `te` | `of` (vetëm brenda `per (... te ...)`) |
+<<<<<<< HEAD
 | `kete` | `this` | `konstruktor` | `constructor` |
 | `ndryshon` | `extends` | `prindi` | `super` |
 | `statik` | `static` | `nderro` | `switch` |
 | `rasti` | `case` | `paracaktuar` | `default` |
+=======
+>>>>>>> b51f9f42e105c6bb473c4d7f285996426711d7eb
 
 ---
 
@@ -230,7 +258,11 @@ Këto injektohen automatikisht — nuk kërkojnë asnjë `importo`:
 
 ## Ndërfaqja grafike (GUI)
 
+<<<<<<< HEAD
 Eagle Script ofron krijim aplikacionesh desktop me Qt përmes addon-it native EagleGUI, me API krejtësisht shqip. **Nuk kërkohet asnjë import** — funksionet grafike injektohen automatikisht dhe aplikacioni ekzekutohet direkt me Node.
+=======
+Eagle Script ofron krijim aplikacionesh desktop me Qt përmes NodeGui, me API krejtësisht shqip. **Nuk kërkohet asnjë import** — `eagle` i zbulon vetë dhe rinis ekzekutimin me `qode` automatikisht (shih [Zbulimi automatik](#zbulimi-automatik-cli-vs-gui)).
+>>>>>>> b51f9f42e105c6bb473c4d7f285996426711d7eb
 
 ### Funksionet krijuese
 
@@ -428,6 +460,7 @@ q.bej_zhurme()
 
 ```
 eagle-script/
+<<<<<<< HEAD
 ├── index.js          # Pika hyrëse e CLI-t; parsim flamurësh, lexim/ruajtje skedarësh
 ├── perkthyes.js       # Përkthyesi Shqip ⇄ JS (skaner që njeh stringjet, komentet, template-t, regex-et)
 ├── interpreter.js     # Ekzekutuesi (vm) dhe formatimi i gabimeve
@@ -440,19 +473,37 @@ eagle-script/
 ```
 
 > Këta skedarë (`index.js`, `interpreter.js`, `lexer.js`, `gui.js`, `perkthyes.js`, `packager.js`) janë **të rezervuar**: `eagle` refuzon ta ruajë ndonjë skedar të përkthyer që do t'i mbishkruante.
+=======
+├── index.js          # Pika hyrëse e CLI-t; parsim flamurësh, zbulim CLI/GUI, lexim/ruajtje skedarësh
+├── interpreter.js     # Përkthyesi Shqip → JS (dhe anasjelltas) + ekzekutuesi (vm)
+├── lexer.js           # Tokenizuesi (validim sintakse)
+├── gui.js              # Wrapper-i shqip mbi @nodegui/nodegui (Qt)
+├── package.json
+└── teste/              # Skriptet .es të testimit
+```
+
+> Këta katër skedarë (`index.js`, `interpreter.js`, `lexer.js`, `gui.js`) janë **të rezervuar**: `eagle` refuzon ta ruajë ndonjë skedar të përkthyer që do t'i mbishkruante.
+>>>>>>> b51f9f42e105c6bb473c4d7f285996426711d7eb
 
 ---
 
 ## Kufizime dhe shënime teknike
 
+<<<<<<< HEAD
 - **Skriptet GUI ekzekutohen me `node`** — cikli i ngjarjeve Qt menaxhohet nga `gui.js`; në Windows, DLL-të dhe shtojcat ngarkohen nga dosja `eaglegui`.
+=======
+- **Skriptet GUI kërkojnë `qode`**, jo `node` — NodeGui përdor një fork të Node-it (`qode`) që bashkon event loop-in e Qt-it me atë të Node.js. `eagle` e zbulon dhe e rinis vetë automatikisht kur nevojitet; instalo NodeGui me `npm install @nodegui/nodegui`.
+>>>>>>> b51f9f42e105c6bb473c4d7f285996426711d7eb
 - **Ekzekutimi normal** (skriptet pa GUI) përdor modulin `vm` të Node-it (`vm.runInNewContext`) — kodi ekzekutohet në një kontekst të izoluar, jo direkt në procesin kryesor.
 - **`--perkthe`** ruan gjithashtu një skedar `.js` të pavarur; nëse skripti përdor GUI, në rreshtin e parë të atij skedari shtohet automatikisht `require(...)` drejt `gui.js` (me shteg absolut, që të funksionojë pavarësisht ku ruhet skedari).
 - Emri i skedarëve `.es` **nuk duhet të përplaset** me `index.js`, `interpreter.js`, `lexer.js` ose `gui.js`.
 - Komentet mbështeten me `#` ose `//` (rresht i vetëm) dhe `/* ... */` (shumë-rreshtësh, vetëm në lexer).
+<<<<<<< HEAD
 - Komentet `#` dhe `//` mbështeten kudo në rresht (edhe pas stringjeve); `/* ... */` për shumë rreshta. `#` brenda stringu është tekst i zakonshëm.
 - Rreshtat e kodit të përkthyer përputhen një-me-një me skedarin `.es`, ndaj gabimet tregojnë rreshtin e saktë.
 - Brenda `${...}` të template-ve fjalët kyçe dhe funksionet përkthehen si kudo tjetër. Çelësat e objekteve (`{ne: 1}`) dhe emrat pas pikës (`obj.ne`) nuk ndryshojnë.
 - Nëse përcakton vetë një metodë me emër të njëjtë me një metodë të gjuhës (p.sh. `filtro(...) {...}`), ajo ka përparësi në gjithë skedarin: `.filtro` nuk përkthehet më në `.filter`.
 - `lexo("pyetja ")` lexon një rresht nga tastiera (sinkron).
 - `klase` si emër ndryshoreje (`leje klase = "10-B"`) funksionon.
+=======
+>>>>>>> b51f9f42e105c6bb473c4d7f285996426711d7eb
