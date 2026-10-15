@@ -1,0 +1,23 @@
+{
+  "name": "eagle-script",
+  "version": "1.1.0",
+  "description": "Ekosistemi Eagle Script - Gjuhë programimi, GUI dhe Paketim",
+  "main": "index.js",
+  "bin": {
+    "eagle": "index.js"
+  },
+  "scripts": {
+    "test": "node tests/run.js"
+  },
+  "keywords": [
+    "albanian",
+    "programming-language",
+    "eagle-script",
+    "shqip"
+  ],
+  "author": "Geri",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
